@@ -13,7 +13,7 @@
 - ルール：通常のオセロと同じ
 
 ## デモ動画
-![動作デモ](README/Otello-demo.gif)
+![動作デモ](README-resource/Othello-demo.gif)
 
 ## 実行ファイルの位置
 x64/Release/Othello.exe
