@@ -1,0 +1,470 @@
+#define _CRT_SECURE_NO_WARNINGS
+#include "DxLib.h"
+#include "prototype.h"
+#include "global.h"
+#include "define.h"
+
+
+// https://kage3.cocolog-nifty.com/blog/2014/03/post-c1b7.html  参考サイト（コンソール画面）
+
+//*******************************************************
+// デバッグ用のコンソールの初期処理(メインループ前に呼ぶ)
+//*******************************************************
+void initDebugConsole() {
+	// デバッグ用コンソール画面表示フラグが表示しない設定の場合、処理終了
+	//if (debugInfo.debugConsoleDisplayFlg == FALSE) {
+	//	return;
+	//}
+	//デバッグ用にコンソールを呼び出す
+	AllocConsole();
+	(void)freopen("CONOUT$", "w", stdout);
+	(void)freopen("CONIN$", "r", stdin);
+	// デバッグコンソールがアクティブウィンドウになるので
+	// ゲーム本体のウィンドウをアクティブにする
+	SetForegroundWindow(GetMainWindowHandle());
+}
+//*******************************************************
+// デバッグ用のコンソールのクリア処理
+//*******************************************************
+void clearDebugConsole() {
+	//// デバッグ用コンソール画面表示フラグが表示しない設定の場合、処理終了
+	//if (debugInfo.debugConsoleDisplayFlg == FALSE) {
+	//	return;
+	//}
+	system("cls");
+}
+//*******************************************************
+// デバッグ用のコンソールの終了処理(メインループ後に呼ぶ)
+//*******************************************************
+void endDebugConsole() {
+	//// デバッグ用コンソール画面表示フラグが表示しない設定の場合、処理終了
+	//if (debugInfo.debugConsoleDisplayFlg == FALSE) {
+	//	return;
+	//}
+	//コンソール解放
+	FreeConsole();
+}
+
+
+
+
+
+// プログラムは WinMain から始まります
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+{
+	//*******************************************
+	// 初期設定
+	//*******************************************
+	{
+		initDebugConsole();							// コンソールの表示
+		ChangeWindowMode(TRUE);						// TRUE : ウィンドウ  FALSE ; フルスクリーン
+		SetGraphMode(500, 500, 32);					// ウィンドウサイズ
+		SetWindowSizeChangeEnableFlag(TRUE);		// ウィンドウサイズの変更を許可するか否か
+		SetMainWindowText("Othello");				// ウィンドウ名
+		SetFullScreenResolutionMode(DX_FSRESOLUTIONMODE_DESKTOP);		// フルスクリーンモード時の解像度モードを設定する
+
+		SetBackgroundColor(241, 237, 238);			// 画面の背景色を設定
+		if (DxLib_Init() == -1) return -1;			// エラーが起きたら直ちに終了
+		SetDrawScreen(DX_SCREEN_BACK);				// 裏画面に描画する
+		SetMouseDispFlag(TRUE);						// マウスを画面上に表示する
+	}
+
+
+
+
+	//int x = 5;
+	//int y = 3;
+
+	//printBits(bB | bW);
+	//printf("\n\n\n");
+	//put(0, 0, 0);
+	//put(5, 2, 0);
+	printBits(horizontalMask);
+	printf("\n\n");
+	printBits(verticalMask);
+	printf("\n\n");
+	printBits(allsideMask);
+
+
+
+	Handle_load();	// 各種ハンドルの読み込み
+
+
+TITLE:
+	initialize();	// 各種変数の初期化
+
+
+
+	// ゲームメインループ
+	while (ProcessMessage() != -1) {
+
+		if ((GetMouseInput() & MOUSE_INPUT_LEFT) == 0) clickFlag = 0;
+
+		search_selectable(turn);	// 合法手を探す
+		select_player();		// マウスで石を置く
+		countStone();			// 石を数える
+		draw_board();			// 盤面の描画
+
+
+
+
+
+
+
+
+
+
+
+
+
+		ScreenFlip();
+
+		if (cntB + cntW == 64) {
+			WaitTimer(2000);
+			ending();
+			goto TITLE;
+		}
+
+
+		if (CheckHitKey(KEY_INPUT_ESCAPE)) {
+			DrawString(400, 30, "終了", 0x000000);
+			WaitKey();				// キー入力待ち
+			endDebugConsole();		// コンソールの開放
+			DxLib_End();			// ＤＸライブラリ使用の終了処理
+			return 0;				// ソフトの終了 
+		}
+	}
+
+
+	return 0;
+}
+
+void Handle_load() {
+	GHandle[0] = LoadGraph("image/stone-black.png");
+	GHandle[1] = LoadGraph("image/stone-white.png");
+	GHandle[2] = LoadGraph("image/stone-gray.png");
+	GHandle[3] = LoadGraph("image/board.png");
+	GHandle[4] = LoadGraph("image/board-resultB.png");
+	GHandle[5] = LoadGraph("image/board-resultW.png");
+	GHandle[6] = LoadGraph("image/player.png");
+	GHandle[7] = LoadGraph("image/com.png");
+	GHandle[8] = LoadGraph("image/turnB.png");
+	GHandle[9] = LoadGraph("image/turnW.png");
+
+	FHandle[0] = CreateFontToHandle(NULL, 30, -1, -1);
+	FHandle[1] = CreateFontToHandle("UD デジタル 教科書体 NK-B", 40, -1, -1);
+}
+
+void initialize() {
+
+	// ビットボードの初期化
+	bB = 0b0000000000000000000000000000100000010000000000000000000000000000;	// bitboard Black
+	bW = 0b0000000000000000000000000001000000001000000000000000000000000000;	// bitboard White
+	bN = 0b0000000000000000000000000000000000000000000000000000000000000000;	// bitboard Now  現在の盤面
+}
+
+void ending() {
+
+	if(cntB > cntW) DrawGraph(0, 0, GHandle[4], TRUE);	// 盤の描画
+	else DrawGraph(0, 0, GHandle[5], TRUE);	// 盤の描画
+
+	DrawFormatStringToHandle(208, 165, 0x000000, FHandle[1], "%2d", 12);
+	DrawFormatStringToHandle(208, 252, 0xFFFFFF, FHandle[1], "%2d", 12);
+
+	ScreenFlip();
+	
+	// エンターもしくはエスケープキーでメニューに戻る
+	while (ProcessMessage() != -1) {
+		if (CheckHitKey(KEY_INPUT_ESCAPE) || CheckHitKey(KEY_INPUT_RETURN)) {
+			break;
+		}
+	}
+}
+
+void draw_board() {
+
+	DrawGraph(0, 0, GHandle[3], TRUE);	// 盤の描画
+
+
+	// 黒石の描画
+	for (int i = 63; i >= 0; i--) {
+		if (((bB >> i) & 1) == 1) {
+			int xx = abs((63 - i) % 8);
+			int yy = abs((63 - i) / 8);
+			DrawExtendGraph((baseX + stoneSize) + xx * masuSize, (baseY + stoneSize) + yy * masuSize, ((baseX - stoneSize) + xx * masuSize) + masuSize, ((baseY - stoneSize) + yy * masuSize) + masuSize, GHandle[0], TRUE);
+		}
+	}
+	// 白石の描画
+	for (int i = 63; i >= 0; i--) {
+		if (((bW >> i) & 1) == 1) {
+			int xx = abs((63 - i) % 8);
+			int yy = abs((63 - i) / 8);
+			DrawExtendGraph((baseX + stoneSize) + xx * masuSize, (baseY + stoneSize) + yy * masuSize, ((baseX - stoneSize) + xx * masuSize) + masuSize, ((baseY - stoneSize) + yy * masuSize) + masuSize, GHandle[1], TRUE);
+		}
+	}
+	// 合法手の描画
+	for (int i = 63; i >= 0; i--) {
+		if (((bSelectable >> i) & 1) == 1) {
+			int xx = abs((63 - i) % 8);
+			int yy = abs((63 - i) / 8);
+			DrawExtendGraph((baseX + selectableSize) + xx * masuSize, (baseY + selectableSize) + yy * masuSize, ((baseX - selectableSize) + xx * masuSize) + masuSize, ((baseY - selectableSize) + yy * masuSize) + masuSize, GHandle[2], TRUE);
+		}
+	}
+
+	// 左下に各色の石の数を描画
+	// １桁と２桁で別の調整をする
+	if(cntB < 10) DrawFormatStringToHandle(71, 460, 0xFFFFFF, FHandle[0], "%d", cntB);
+	else if(cntB >= 10) DrawFormatStringToHandle(63, 460, 0xFFFFFF, FHandle[0], "%2d", cntB);
+	if(cntW < 10) DrawFormatStringToHandle(133, 460, 0x000000, FHandle[0], "%d", cntW);
+	else if(cntW >= 10) DrawFormatStringToHandle(125, 460, 0x000000, FHandle[0], "%2d", cntW);
+	
+	// 手番を表示
+	if (turn == 0) DrawGraph(0, 0, GHandle[8], TRUE);
+	else if (turn == 1) DrawGraph(0, 0, GHandle[9], TRUE);
+
+}
+
+void printBits(long long n) {
+	for (int i = 63; i >= 0; i--) {
+		printf("%lld ", (n >> i) & 1);
+		if (i % 8 == 0) printf("\n");  // 8ビットごとに改行を入れる
+	}
+	printf("\n");
+}
+
+void put(int x, int y, int color) {
+	// turn :: 0 = 黒 , 1 = 白
+
+	unsigned long long d = 0b1000000000000000000000000000000000000000000000000000000000000000;	// 特定の位置に石を置くためのビット列　論理シフトして使う
+
+	unsigned long long n = y * 8 + x;	// 該当箇所にビットを立てる
+
+	putPlace = d >> n;	// 石を置いた場所にビットが立ったビット列
+
+
+	if (color == 0) {
+		bB |= putPlace;
+		bN = bB | bW;
+	}
+	else if(color == 1) {
+		bW |= putPlace;
+		bN = bB | bW;
+	}
+}
+
+void serch_selectable(int color) {
+
+	unsigned long long bC1 = 0;		// Bitboard Color1	手番の石の色
+	unsigned long long bC2 = 0;		// Bitboard Color2
+	unsigned long long bTmp = 0;	// 一時変数
+	bSelectable = 0;	// 合法手をリセット
+
+	if (color == 0) {
+		bC1 = bB;
+		bC2 = bW;
+	}
+	else if (color == 1) {
+		bC1 = bW;
+		bC2 = bB;
+	}
+
+
+	// 各方向の合法手を探す
+	{
+		// 右
+		for (int i = 1; i <= 5; i++) {
+			bTmp |= (horizontalMask & bC2) & (bC1 >> i);
+		}
+		bSelectable |= (bTmp >> 1) & ~(bB | bW);
+		bTmp = 0;
+
+		// 左
+		for (int i = 1; i <= 5; i++) {
+			bTmp |= (horizontalMask & bC2) & (bC1 << i);
+		}
+		bSelectable |= (bTmp << 1) & ~(bB | bW);
+		bTmp = 0;
+
+		// 上
+		for (int i = 1; i <= 5; i++) {
+			bTmp |= (verticalMask & bC2) & (bC1 << i * 8);
+		}
+		bSelectable |= (bTmp << 8) & ~(bB | bW);
+		bTmp = 0;
+
+		// 下
+		for (int i = 1; i <= 5; i++) {
+			bTmp |= (verticalMask & bC2) & (bC1 >> i * 8);
+		}
+		bSelectable |= (bTmp >> 8) & ~(bB | bW);
+		bTmp = 0;
+
+		// 右上
+		for (int i = 1; i <= 5; i++) {
+			bTmp |= (allsideMask & bC2) & (bC1 << i * 7);
+		}
+		bSelectable |= (bTmp << 7) & ~(bB | bW);
+		bTmp = 0;
+
+		// 左上
+		for (int i = 1; i <= 5; i++) {
+			bTmp |= (allsideMask & bC2) & (bC1 << i * 9);
+		}
+		bSelectable |= (bTmp << 9) & ~(bB | bW);
+		bTmp = 0;
+
+		// 右下
+		for (int i = 1; i <= 5; i++) {
+			bTmp |= (allsideMask & bC2) & (bC1 >> i * 9);
+		}
+		bSelectable |= (bTmp >> 9) & ~(bB | bW);
+		bTmp = 0;
+
+		// 左下
+		for (int i = 1; i <= 5; i++) {
+			bTmp |= (allsideMask & bC2) & (bC1 >> i * 7);
+		}
+		bSelectable |= (bTmp >> 7) & ~(bB | bW);
+		bTmp = 0;
+	}
+
+
+
+
+
+}
+
+void select_player() {
+
+	int mx, my;		// マウスの座標
+
+	GetMousePoint(&mx, &my);
+
+	for (int i = 0; i < 8; i++) {
+		for (int j = 0; j < 8; j++) {
+
+
+			if ((mx > baseX + (masuSize * j) && mx < baseX + (masuSize * j) + masuSize) &&
+				(my > baseY + (masuSize * i) && my < baseY + (masuSize * i) + masuSize)) {
+
+				if (clickFlag == 0 && (GetMouseInput() & MOUSE_INPUT_LEFT) != 0) {
+
+					clickFlag = 1;	// クリックフラグを立てる
+
+					// クリックしたマスが合法手か判定する。合法手の場合のみ石を置く
+					for (int k = 63; k >= 0; k--) {
+
+						if ((bSelectable >> k) & 1) {
+
+							// x座標とy座標
+							int xx = abs((63 - k) % 8);
+							int yy = abs((63 - k) / 8);
+
+							if (xx == j && yy == i) {
+								put(j, i, turn);		// 石を置く
+								reverse(turn);			// 石をひっくり返す
+								turn = (turn + 1) % 2;	// 手番を入れ替える
+
+								system("cls");
+								printBits(bB | bW);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
+
+
+
+
+}
+
+void countStone() {
+
+	// 石のカウントを初期化
+	cntB = 0;
+	cntW = 0;
+
+	// 黒と白の石の数を数える
+	for (int i = 0; i < 64; i++) {
+		if ((bB >> i) & 1) cntB++;
+		if ((bW >> i) & 1) cntW++;
+	}
+}
+
+void reverse(int color) {
+
+	unsigned long long bC1 = 0;  // 手番の石の色
+	unsigned long long bC2 = 0;  // 相手の石の色
+
+	// 手番に応じたボードを設定
+	if (color == 0) {
+		bC1 = bB;
+		bC2 = bW;
+	}
+	else if (color == 1) {
+		bC1 = bW;
+		bC2 = bB;
+	}
+
+	unsigned long long rev = 0;  // 反転する位置を格納するビットボード
+
+	// ８方向をチェックする
+	for (int i = 0; i < 8; i++) {
+
+		unsigned long long rev_ = 0;  // 各方向で反転する場所
+		unsigned long long mask = transfer(putPlace, i);  // mask : ひっくり返せる石の場所
+
+		// 石を置いた場所から任意の方向に動かし、相手の石が続いているかを確認
+		while ((mask != 0) && ((mask & bC2) != 0)) {
+			rev_ |= mask;			   // 相手の石を反転候補に追加
+			mask = transfer(mask, i);  // 次の場所を調べる
+		}
+
+		// 最後に自分の石があれば、その方向で反転できる
+		if ((mask & bC1) != 0) {
+			rev |= rev_;  // 反転する場所を確定
+		}
+	}
+
+	// 反転処理
+	bC1 |= (putPlace | rev);  // 自分の石と反転する場所を反転
+	bC2 ^= rev;             // 相手の石を反転
+
+	// 反転後、グローバルボードに更新を反映させる場合（必要に応じて）
+	if (color == 0) {
+		bB = bC1;  // 黒のボードに反映（手番が黒の場合）
+		bW = bC2;  // 白のボードに反映（手番が白の場合）
+	}
+	else if (color == 1) {
+		bB = bC2;  // 黒のボードに反映（手番が黒の場合）
+		bW = bC1;  // 白のボードに反映（手番が白の場合）
+	}
+
+}
+
+unsigned long long transfer(unsigned long long  putPlace, int k){
+
+	switch (k){
+	case 0: //右
+		return (putPlace >> 1) & horizontalMask;
+	case 1: //左
+		return (putPlace << 1) & horizontalMask;
+	case 2: //上
+		return (putPlace << 8) & verticalMask;
+	case 3: //下
+		return (putPlace >> 8) & verticalMask;
+	case 4: //右上
+		return (putPlace << 7) & allsideMask;
+	case 5: //左上
+		return (putPlace << 9) & allsideMask;
+	case 6: //右下
+		return (putPlace >> 9) & allsideMask;
+	case 7: //左下
+		return (putPlace >> 7) & allsideMask;
+	default:
+		return 0;
+	}
+}

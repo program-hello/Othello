@@ -1,0 +1,1220 @@
+#define _CRT_SECURE_NO_WARNINGS
+#include "DxLib.h"
+#include "prototype.h"
+#include "global.h"
+#include "define.h"
+
+
+// https://kage3.cocolog-nifty.com/blog/2014/03/post-c1b7.html  参考サイト（コンソール画面）
+
+//*******************************************************
+// デバッグ用のコンソールの初期処理(メインループ前に呼ぶ)
+//*******************************************************
+void initDebugConsole() {
+	// デバッグ用コンソール画面表示フラグが表示しない設定の場合、処理終了
+	//if (debugInfo.debugConsoleDisplayFlg == FALSE) {
+	//	return;
+	//}
+	//デバッグ用にコンソールを呼び出す
+	AllocConsole();
+	(void)freopen("CONOUT$", "w", stdout);
+	(void)freopen("CONIN$", "r", stdin);
+	// デバッグコンソールがアクティブウィンドウになるので
+	// ゲーム本体のウィンドウをアクティブにする
+	SetForegroundWindow(GetMainWindowHandle());
+}
+//*******************************************************
+// デバッグ用のコンソールのクリア処理
+//*******************************************************
+void clearDebugConsole() {
+	//// デバッグ用コンソール画面表示フラグが表示しない設定の場合、処理終了
+	//if (debugInfo.debugConsoleDisplayFlg == FALSE) {
+	//	return;
+	//}
+	system("cls");
+}
+//*******************************************************
+// デバッグ用のコンソールの終了処理(メインループ後に呼ぶ)
+//*******************************************************
+void endDebugConsole() {
+	//// デバッグ用コンソール画面表示フラグが表示しない設定の場合、処理終了
+	//if (debugInfo.debugConsoleDisplayFlg == FALSE) {
+	//	return;
+	//}
+	//コンソール解放
+	FreeConsole();
+}
+
+
+
+
+
+// プログラムは WinMain から始まります
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+{
+	//*******************************************
+	// 初期設定
+	//*******************************************
+	{
+		initDebugConsole();							// コンソールの表示
+		ChangeWindowMode(TRUE);						// TRUE : ウィンドウ  FALSE ; フルスクリーン
+		SetGraphMode(500, 500, 32);					// ウィンドウサイズ
+		SetWindowSizeChangeEnableFlag(TRUE);		// ウィンドウサイズの変更を許可するか否か
+		SetMainWindowText("Othello");				// ウィンドウ名
+		SetFullScreenResolutionMode(DX_FSRESOLUTIONMODE_DESKTOP);		// フルスクリーンモード時の解像度モードを設定する
+
+		SetBackgroundColor(241, 237, 238);			// 画面の背景色を設定
+		if (DxLib_Init() == -1) return -1;			// エラーが起きたら直ちに終了
+		SetDrawScreen(DX_SCREEN_BACK);				// 裏画面に描画する
+		SetMouseDispFlag(TRUE);						// マウスを画面上に表示する
+	}
+
+
+
+
+
+
+	Handle_load();	// 各種ハンドルの読み込み
+
+
+TITLE:
+	initialize();	// 各種変数の初期化
+
+
+	// ゲームメインループ
+	while (ProcessMessage() != -1) {
+
+		// クリックした状態でほかの要素が反応することを防ぐ
+		if ((GetMouseInput() & MOUSE_INPUT_LEFT) == 0) clickFlag = 0;
+
+		search_selectable(playerColor);// 合法手を探す
+
+
+		countStone();			// 石を数える
+
+		// 盤面の石の数によって探索を深くする
+		if ((cntB + cntW) == 4) depthNow = 10;
+		else if ((cntB + cntW) == 56) depthNow = 10;
+		else if ((cntB + cntW) == 55) depthNow = 11;
+		else if ((cntB + cntW) == 54) depthNow = 12;
+		else if ((cntB + cntW) == 53) depthNow = 13;
+		else if ((cntB + cntW) == 52) depthNow = 14;
+		else if ((cntB + cntW) == 51) depthNow = 15;
+		else if ((cntB + cntW) == 50) depthNow = 16;
+		else if ((cntB + cntW) == 49) depthNow = 17;
+		else if ((cntB + cntW) == 48) depthNow = 18;
+		else if ((cntB + cntW) == 47) depthNow = 19;
+		else if (((cntB + cntW) >= 34) && ((cntB + cntW) <= 46)) depthNow = 12;
+
+
+
+
+
+		if (mode == 1) {
+			if(turn == 0) select_player();		// マウスで石を置く
+			else select_player();				// マウスで石を置く
+		}
+		else if (mode == 0) {
+			if (turn == 0) select_player();		// マウスで石を置く
+			else select_com();				
+		}
+
+
+		draw_board();			// 盤面の描画
+
+
+
+
+
+
+
+		ScreenFlip();
+
+		countStone();			// 石を数える
+		if (cntB + cntW == 64 || cntPass == 2 || cntB == 0 || cntW == 0) {
+			WaitTimer(2000);
+			ending();
+			goto TITLE;
+		}
+
+
+		if (CheckHitKey(KEY_INPUT_ESCAPE)) {
+			DrawString(400, 30, "終了", 0x000000);
+			WaitKey();				// キー入力待ち
+			endDebugConsole();		// コンソールの開放
+			DxLib_End();			// ＤＸライブラリ使用の終了処理
+			return 0;				// ソフトの終了 
+		}
+	}
+
+
+	return 0;
+}
+
+void Handle_load() {
+	GHandle[0] = LoadGraph("image/stone-black.png");
+	GHandle[1] = LoadGraph("image/stone-white.png");
+	GHandle[2] = LoadGraph("image/stone-gray.png");
+	GHandle[3] = LoadGraph("image/board.png");
+	GHandle[4] = LoadGraph("image/board-resultB.png");
+	GHandle[5] = LoadGraph("image/board-resultW.png");
+	GHandle[6] = LoadGraph("image/player.png");
+	GHandle[7] = LoadGraph("image/com.png");
+	GHandle[8] = LoadGraph("image/turnB.png");
+	GHandle[9] = LoadGraph("image/turnW.png");
+	GHandle[10] = LoadGraph("image/pass.png");
+	GHandle[11] = LoadGraph("image/board-draw.png");
+
+	FHandle[0] = CreateFontToHandle(NULL, 30, -1, DX_FONTTYPE_ANTIALIASING);
+	FHandle[1] = CreateFontToHandle("UD デジタル 教科書体 NK-B", 40, -1, DX_FONTTYPE_ANTIALIASING);
+	FHandle[2] = CreateFontToHandle("UD デジタル 教科書体 NK-B", 35, -1, DX_FONTTYPE_ANTIALIASING);
+}
+
+void initialize() {
+
+	// ビットボードの初期化
+	bB = 0b0000000000000000000000000000100000010000000000000000000000000000;	// bitboard Black
+	bW = 0b0000000000000000000000000001000000001000000000000000000000000000;	// bitboard White
+	bN = 0b0000000000000000000000000000000000000000000000000000000000000000;	// bitboard Now  現在の盤面
+
+	cntPass = 0;	// パスのカウントを初期化
+	turn = (TMP + 1) % 2;		// メニュー画面を作成したら削除する
+	steps = 1;		// 手数カウントをリセット
+
+	// 先後の設定
+	if (turn == 0) {
+		playerColor = 0;
+		comColor = 1;
+	}
+	if (turn == 1) {
+		playerColor = 1;
+		comColor = 0;
+	}
+
+	countStone();	// 石の数を初期化　ＣＯＭが先手の時先に初期化していないと maxLevel() がうまく動かない
+
+ }
+
+void ending() {
+
+	if(cntB > cntW) DrawGraph(0, 0, GHandle[4], TRUE);			// 盤の描画  黒勝ち
+	else if(cntB < cntW) DrawGraph(0, 0, GHandle[5], TRUE);		// 盤の描画　白勝ち
+	else if(cntB == cntW) DrawGraph(0, 0, GHandle[11], TRUE);	// 盤の描画　引き分け
+
+	DrawFormatStringToHandle(208, 165, 0x000000, FHandle[1], "%2d", cntB);
+	DrawFormatStringToHandle(208, 252, 0xFFFFFF, FHandle[1], "%2d", cntW);
+
+	ScreenFlip();
+	
+	// エンターもしくはエスケープキーでメニューに戻る
+	while (ProcessMessage() != -1) {
+		if (CheckHitKey(KEY_INPUT_ESCAPE) || CheckHitKey(KEY_INPUT_RETURN)) {
+			break;
+		}
+	}
+}
+
+void draw_board() {
+
+	DrawGraph(0, 0, GHandle[3], TRUE);	// 盤の描画
+
+
+	// 合法手の描画
+	for (int i = 63; i >= 0; i--) {
+		if (((bSelectable >> i) & 1) == 1) {
+			int xx = abs((63 - i) % 8);
+			int yy = abs((63 - i) / 8);
+			DrawExtendGraph((baseX + selectableSize) + xx * masuSize, (baseY + selectableSize) + yy * masuSize, ((baseX - selectableSize) + xx * masuSize) + masuSize, ((baseY - selectableSize) + yy * masuSize) + masuSize, GHandle[2], TRUE);
+		}
+	}
+
+	// 黒石の描画
+	for (int i = 63; i >= 0; i--) {
+		if (((bB >> i) & 1) == 1) {
+			int xx = abs((63 - i) % 8);
+			int yy = abs((63 - i) / 8);
+			DrawExtendGraph((baseX + stoneSize) + xx * masuSize, (baseY + stoneSize) + yy * masuSize, ((baseX - stoneSize) + xx * masuSize) + masuSize, ((baseY - stoneSize) + yy * masuSize) + masuSize, GHandle[0], TRUE);
+		}
+	}
+	// 白石の描画
+	for (int i = 63; i >= 0; i--) {
+		if (((bW >> i) & 1) == 1) {
+			int xx = abs((63 - i) % 8);
+			int yy = abs((63 - i) / 8);
+			DrawExtendGraph((baseX + stoneSize) + xx * masuSize, (baseY + stoneSize) + yy * masuSize, ((baseX - stoneSize) + xx * masuSize) + masuSize, ((baseY - stoneSize) + yy * masuSize) + masuSize, GHandle[1], TRUE);
+		}
+	}
+
+	// パスボタンの描画（合法手がない場合）
+	if (bSelectable == 0) DrawGraph(0, 0, GHandle[10], TRUE);
+
+
+	// 左下に各色の石の数を描画
+	// １桁と２桁で別の調整をする	
+	if(cntB < 10) DrawFormatStringToHandle(71, 460, 0xFFFFFF, FHandle[0], "%d", cntB);
+	else if(cntB >= 10) DrawFormatStringToHandle(63, 460, 0xFFFFFF, FHandle[0], "%2d", cntB);
+	if(cntW < 10) DrawFormatStringToHandle(133, 460, 0x000000, FHandle[0], "%d", cntW);
+	else if(cntW >= 10) DrawFormatStringToHandle(125, 460, 0x000000, FHandle[0], "%2d", cntW);
+	
+	// 手番を表示
+	if (playerColor == 0 && turn == 0) DrawGraph(0, 0, GHandle[8], TRUE);
+	else if (playerColor == 1 && turn == 0) DrawGraph(0, 0, GHandle[9], TRUE);
+	// 手番を表示
+	if (playerColor == 0 && turn == 1) DrawGraph(0, 0, GHandle[9], TRUE);
+	else if (playerColor == 1 && turn == 1) DrawGraph(0, 0, GHandle[8], TRUE);
+
+	// 現在の手数を表示
+	DrawFormatStringToHandle(327, 460, 0xDCDCDC, FHandle[2], "%2d手目", (cntB + cntW) - 3);
+}
+
+void printBits(long long n) {
+	for (int i = 63; i >= 0; i--) {
+		printf("%lld ", (n >> i) & 1);
+		if (i % 8 == 0) printf("\n");  // 8ビットごとに改行を入れる
+	}
+	printf("\n");
+}
+
+void put(int x, int y, int color) {
+	// turn :: 0 = 黒 , 1 = 白
+
+	unsigned long long d = 0b1000000000000000000000000000000000000000000000000000000000000000;	// 特定の位置に石を置くためのビット列　論理シフトして使う
+
+	unsigned long long n = y * 8 + x;	// 該当箇所にビットを立てる
+
+	putPlace = d >> n;	// 石を置いた場所にビットが立ったビット列
+
+
+	if (color == 0) {
+		bB |= putPlace;
+		bN = bB | bW;
+	}
+	else if(color == 1) {
+		bW |= putPlace;
+		bN = bB | bW;
+	}
+}
+
+void remove(int x, int y, int color) {
+	// turn :: 0 = 黒 , 1 = 白
+
+	unsigned long long d = 0b1000000000000000000000000000000000000000000000000000000000000000;	// 特定の位置に石を置くためのビット列　論理シフトして使う
+
+	unsigned long long n = y * 8 + x;	// 該当箇所にビットを立てる
+
+	putPlace = d >> n;	// 石を置いた場所にビットが立ったビット列
+
+
+	if (color == 0) {
+		bB ^= putPlace;
+		bN = bB | bW;
+	}
+	else if (color == 1) {
+		bW ^= putPlace;
+		bN = bB | bW;
+	}
+}
+
+void search_selectable(int color) {
+
+	unsigned long long bC1 = 0;		// Bitboard Color1	手番の石の色
+	unsigned long long bC2 = 0;		// Bitboard Color2
+	unsigned long long bTC1 = 0;		// Bitboard Color2
+	unsigned long long bTC2 = 0;		// Bitboard Color2
+	unsigned long long bTmp = 0;	// 一時変数
+	bSelectable = 0;	// 合法手をリセット
+
+	if (color == 0) {
+		bC1 = bB;
+		bC2 = bW;
+	}
+	else if (color == 1) {
+		bC1 = bW;
+		bC2 = bB;
+	}
+
+
+	// 各方向の合法手を探す
+	{
+		// 右
+		bTC1 = bC1;
+		for (int i = 1; i <= 7; i++) {
+			// horizontalMask の０の部分で bC1 のビットを消したいけど、直接 bC1 を変更すると後のコードで使えなくなるので、bTC1 という一時変数に退避させる
+			bTC1 = (horizontalMask & bC2) & (bTC1 >> 1);
+			bTmp |= (horizontalMask & bC2) & bTC1;
+		}
+		bSelectable |= (bTmp >> 1) & ~(bB | bW);
+		bTmp = 0;
+		bTC1 = 0;
+
+		// 左
+		bTC1 = bC1;
+		for (int i = 1; i <= 7; i++) {
+			bTC1 = (horizontalMask & bC2) & (bTC1 << 1);
+			bTmp |= (horizontalMask & bC2) & bTC1;
+		}
+		bSelectable |= (bTmp << 1) & ~(bB | bW);
+		bTmp = 0;
+		bTC1 = 0;
+
+		// 上
+		bTC1 = bC1;
+		for (int i = 1; i <= 7; i++) {
+			bTC1 = (verticalMask & bC2) & (bTC1 << 8);
+			bTmp |= (verticalMask & bC2) & bTC1;
+		}
+		bSelectable |= (bTmp << 8) & ~(bB | bW);
+		bTmp = 0;
+		bTC1 = 0;
+
+		// 下
+		bTC1 = bC1;
+		for (int i = 1; i <= 7; i++) {
+			bTC1 = (verticalMask & bC2) & (bTC1 >> 8);
+			bTmp |= (verticalMask & bC2) & bTC1;
+		}
+		bSelectable |= (bTmp >> 8) & ~(bB | bW);
+		bTmp = 0;
+		bTC1 = 0;
+
+		// 右上
+		bTC1 = bC1;
+		for (int i = 1; i <= 7; i++) {
+			bTC1 = (allsideMask & bC2) & (bTC1 << 7);
+			bTmp |= (allsideMask & bC2) & bTC1;
+		}
+		bSelectable |= (bTmp << 7) & ~(bB | bW);
+		bTmp = 0;
+		bTC1 = 0;
+
+		// 左上
+		bTC1 = bC1;
+		for (int i = 1; i <= 7; i++) {
+			bTC1 = (allsideMask & bC2) & (bTC1 << 9);
+			bTmp |= (allsideMask & bC2) & bTC1;
+		}
+		bSelectable |= (bTmp << 9) & ~(bB | bW);
+		bTmp = 0;
+		bTC1 = 0;
+
+		// 右下
+		bTC1 = bC1;
+		for (int i = 1; i <= 7; i++) {
+			bTC1 = (allsideMask & bC2) & (bTC1 >> 9);
+			bTmp |= (allsideMask & bC2) & bTC1;
+		}
+		bSelectable |= (bTmp >> 9) & ~(bB | bW);
+		bTmp = 0;
+		bTC1 = 0;
+
+		// 左下
+		bTC1 = bC1;
+		for (int i = 1; i <= 7; i++) {
+			bTC1 = (allsideMask & bC2) & (bTC1 >> 7);
+			bTmp |= (allsideMask & bC2) & bTC1;
+		}
+		bSelectable |= (bTmp >> 7) & ~(bB | bW);
+		bTmp = 0;
+		bTC1 = 0;
+	}
+}
+
+void select_player() {
+
+	int mx, my;		// マウスの座標
+
+	GetMousePoint(&mx, &my);
+
+	for (int i = 0; i < 8; i++) {
+		for (int j = 0; j < 8; j++) {
+
+
+			if ((mx > baseX + (masuSize * j) && mx < baseX + (masuSize * j) + masuSize) &&
+				(my > baseY + (masuSize * i) && my < baseY + (masuSize * i) + masuSize)) {
+
+				if (clickFlag == 0 && (GetMouseInput() & MOUSE_INPUT_LEFT) != 0) {
+
+					clickFlag = 1;	// クリックフラグを立てる
+
+					// クリックしたマスが合法手か判定する。合法手の場合のみ石を置く
+					for (int k = 63; k >= 0; k--) {
+
+						if ((bSelectable >> k) & 1) {
+
+							// x座標とy座標
+							int xx = abs((63 - k) % 8);
+							int yy = abs((63 - k) / 8);
+
+							if (xx == j && yy == i) {
+								put(j, i, playerColor);		// 石を置く
+								reverse(playerColor);			// 石をひっくり返す
+								turn = (turn + 1) % 2;	// 手番を入れ替える
+								cntPass = 0;	// パスのカウントを初期化
+								steps++;		// 手数をカウント
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// パスボタンをクリック
+	if (bSelectable == 0 && ((mx > 200 && mx < 300) && (my > 450 && my < 500))) {
+		if (clickFlag == 0 && (GetMouseInput() & MOUSE_INPUT_LEFT) != 0) {
+			clickFlag = 1;
+			cntPass++;
+			turn = (turn + 1) % 2;
+		}
+	}
+}
+
+void select_com() {
+
+	search_selectable(comColor);
+	if (bSelectable == 0) {		// 置くますがない場合パスを選択
+		turn = (turn + 1) % 2;
+		cntPass++;
+		WaitTimer(500);
+		return;
+	}
+	draw_board();
+	ScreenFlip();
+	//WaitTimer(500);	// com のレベルが低いときに設定する（画面がちらつくのを防ぐため）
+
+
+	//// お互いに角が取れる局面の場合、必ず角を取る
+	//{
+	//	search_selectable(0);
+	//	unsigned long long tmpB = bSelectable;
+	//	search_selectable(1);
+	//	unsigned long long tmpW = bSelectable;
+	//	countStone();
+	//	if (cntB + cntW < 47) {		// ４４手目から完全解析するためそれ以降は動作させない
+	//		if (((tmpB >> 63) & 1) && ((tmpW >> 63) & 1)) {	// 左上角
+	//			bestX = 0;
+	//			bestY = 0;
+	//			goto EDGE;	// ミニマックス法に通さないようにする
+	//		}
+	//		if (((tmpB >> 56) & 1) && ((tmpW >> 56) & 1)) {	// 右上角
+	//			bestX = 7;
+	//			bestY = 0;
+	//			goto EDGE;
+	//		}
+	//		if (((tmpB >> 7) & 1) && ((tmpW >> 7) & 1)) {	// 左下角
+	//			bestX = 0;
+	//			bestY = 7;
+	//			goto EDGE;
+	//		}
+	//		if (((tmpB >> 0) & 1) && ((tmpW >> 0) & 1)) {	// 右下角
+	//			bestX = 7;
+	//			bestY = 7;
+	//			goto EDGE;
+	//		}
+	//	}
+	//}
+
+
+	// ここを試す *********************************************************************************
+	
+	//// ４０手目（盤面の石の数は４４枚）以降角が取れるチャンスがあれば必ず取る
+	//// 角が取れるタイミングがあったら必ず取る
+	//{
+	//	countStone();	// 現在の石を数える
+	//	search_selectable(comColor);	// com の石の色の選択可能マスを探索
+	//	if ((cntB + cntW) >= 4) {
+	//		if ((bSelectable >> 63) & 1) {	// 左上角
+	//			bestX = 0;
+	//			bestY = 0;
+	//			goto EDGE;	// ミニマックス法に通さないようにする
+	//		}
+	//		if ((bSelectable >> 56) & 1) {	// 右上角
+	//			bestX = 7;
+	//			bestY = 0;
+	//			goto EDGE;
+	//		}
+	//		if ((bSelectable >> 7) & 1) {	// 左下角
+	//			bestX = 0;
+	//			bestY = 7;
+	//			goto EDGE;
+	//		}
+	//		if ((bSelectable >> 0) & 1) {	// 右下角
+	//			bestX = 7;
+	//			bestY = 7;
+	//			goto EDGE;
+	//		}
+	//	}
+	//}
+
+
+	// ミニマックス法
+	depthNum = 0;	// 現在の探索数をリセット
+	if (comColor == 0) maxLevel(-INFINITY, INFINITY, 1);
+	else if(comColor == 1) minLevel(-INFINITY, INFINITY, 1);
+
+	EDGE:
+	put(bestX, bestY, comColor);
+	reverse(comColor);
+	printf("%8d  depthNow = %2d  %2d手目\n", depthNum, depthNow, steps++);
+	turn = (turn + 1) % 2;	// 手番を入れ替える
+	cntPass = 0;	// パスのカウントを初期化
+}
+
+void countStone() {
+
+	// 石のカウントを初期化
+	cntB = 0;
+	cntW = 0;
+
+	// 黒と白の石の数を数える
+	for (int i = 0; i < 64; i++) {
+		if ((bB >> i) & 1) cntB++;
+		if ((bW >> i) & 1) cntW++;
+	}
+}
+
+void reverse(int color) {
+
+	unsigned long long bC1 = 0;  // 手番の石の色
+	unsigned long long bC2 = 0;  // 相手の石の色
+
+	// 手番に応じたボードを設定
+	if (color == 0) {
+		bC1 = bB;
+		bC2 = bW;
+	}
+	else if (color == 1) {
+		bC1 = bW;
+		bC2 = bB;
+	}
+
+	rev = 0;  // 反転する位置を格納するビットボード
+
+	// ８方向をチェックする
+	for (int i = 0; i < 8; i++) {
+
+		unsigned long long rev_ = 0;  // 各方向で反転する場所
+		unsigned long long mask = transfer(putPlace, i);	  // mask : ひっくり返せる石の場所
+		unsigned long long maskPrev = 0;  // 一回動かす前の mask を保存
+
+		// 石を置いた場所から任意の方向に動かし、相手の石が続いているかを確認
+		while ((mask != 0) && ((mask & bC2) != 0)) {
+			rev_ |= mask;			   // 相手の石を反転候補に追加
+			maskPrev = mask;
+			mask = transfer(mask, i);  // 次の場所を調べる
+		}
+
+		// 端まで行った mask は番兵によって値が０になってしまうので、
+		// その一つ前の値を maskPrev に退避させて任意の方向に１マス動かし bC1 との論理積をとる
+		switch (i) {
+		case 0: //右
+			maskPrev = (maskPrev >> 1);
+			break;
+		case 1: //左
+			maskPrev = (maskPrev << 1);
+			break;
+		case 2: //上
+			maskPrev = (maskPrev << 8);
+			break;
+		case 3: //下
+			maskPrev = (maskPrev >> 8);
+			break;
+		case 4: //右上
+			maskPrev = (maskPrev << 7);
+			break;
+		case 5: //左上
+			maskPrev = (maskPrev << 9);
+			break;
+		case 6: //右下
+			maskPrev = (maskPrev >> 9);
+			break;
+		case 7: //左下
+			maskPrev = (maskPrev >> 7);
+			break;
+		}
+
+		// 最後に自分の石があれば、その方向で反転できる
+		if ((maskPrev & bC1) != 0) {
+			rev |= rev_;  // 反転する場所を確定
+		}
+	}
+
+
+	//printf("rev:\n");
+	//printBits(rev);
+	//printf("\n\n");
+
+
+	// 反転処理
+	bC1 |= (putPlace | rev);  // 自分の石と反転する場所を反転
+	bC2 ^= rev;				  // 相手の石を反転
+
+	// 反転後、グローバルボードに更新を反映させる
+	if (color == 0) {
+		bB = bC1;  // 黒のボードに反映（手番が黒の場合）
+		bW = bC2;  // 白のボードに反映（手番が白の場合）
+	}
+	else if (color == 1) {
+		bB = bC2;  // 黒のボードに反映（手番が黒の場合）
+		bW = bC1;  // 白のボードに反映（手番が白の場合）
+	}
+}
+
+unsigned long long transfer(unsigned long long  putPlace, int k){
+
+	switch (k){
+	case 0: //右
+		return (putPlace >> 1) & horizontalMask;
+	case 1: //左
+		return (putPlace << 1) & horizontalMask;
+	case 2: //上
+		return (putPlace << 8) & verticalMask;
+	case 3: //下
+		return (putPlace >> 8) & verticalMask;
+	case 4: //右上
+		return (putPlace << 7) & allsideMask;
+	case 5: //左上
+		return (putPlace << 9) & allsideMask;
+	case 6: //右下
+		return (putPlace >> 9) & allsideMask;
+	case 7: //左下
+		return (putPlace >> 7) & allsideMask;
+	default:
+		return 0;
+	}
+}
+
+
+
+int maxLevel(int alpha, int beta, int depth) {
+	if (depth >= depthNow) {
+		//printf("koko");
+		return evaluation_function(0); // 評価関数の値を返す
+	}
+	countStone();
+	if (cntB + cntW == 64) return evaluation_function(0);		// 盤面が全部埋まったら評価関数の値を返す
+	if (cntB == 0 || cntW == 0) return evaluation_function(0);	// どちらか一方の石がゼロになったら評価関数を返す
+
+	int arrScore[30] = { 0 };	// depth = 1 の時の合法手のスコアを格納
+	int cntArrScore = 0;		// arrScore[] のインデックス用
+
+	int score_max = (int)(-INFINITY);  // 最大スコア（負の無限大で初期化)
+
+	int xx = 0;
+	int yy = 0;
+
+
+
+	for (int i = 63; i >= 0; i--) {
+		search_selectable(0);		// 黒が打てる場所を探す
+		if ((bSelectable >> i) & 1) {
+
+			if (++depthNum > DEPTHNUM) {
+				//printf("koko");
+				return evaluation_function(0);		//  あらかじめ決めた局面数に達したら評価関数の値を返す
+			}
+
+			int score = 0;
+			xx = abs((63 - i) % 8);
+			yy = abs((63 - i) / 8);
+
+			put(xx, yy, 0);		// 黒の石を暫定で置く
+			steps++;			// 手数をカウント
+			int tmpCntPass = cntPass;
+			cntPass = 0;		// パスのカウントをリセット
+			reverse(0);			// 石をひっくり返す
+			unsigned long long tmpPutPlace = putPlace;	 // 置いた石のマスを保存　局面ごとに保存しとかないと値が更新されてしまうから
+			unsigned long long tmpRev = rev;			 // ひっくり返した石のマスを保存　理由は同上
+
+
+			// 暫定で黒石を置いたことで白石が角に置けるようになっていないかチェックする
+			// 白石の合法手の中で角が含まれていないかを判定（角が含まれている場合その手は合法手ではなかったと判断する）
+			search_selectable(1);
+			countStone();
+			if ((((bSelectable >> 63) & 1) || ((bSelectable >> 56) & 1) ||
+				((bSelectable >> 7) & 1) || ((bSelectable >> 0) & 1)) && (cntB + cntW < 46)) {
+				//printf("角置かせない");
+				// reverse の反対の操作
+				bB = bB ^ tmpRev;		// ひっくり返した石のマスを空にする
+				bW = bW | tmpRev;		// ひっくり返されていた白のマスにビットを立てる
+				bB = bB ^ tmpPutPlace;	// 暫定で置いた黒の石を取り除く
+				score = -99999;
+				depthNum--;
+				steps--;				// 手数をひとつ戻す
+				goto SKIP;		// 次の候補手を探索する
+			}
+			search_selectable(0);
+
+
+			score = minLevel(alpha, beta, depth + 1);  // 次は相手のターン
+
+
+			// reverse の反対の操作
+			bB = bB ^ tmpRev;		// ひっくり返した石のマスを空にする
+			bW = bW | tmpRev;		// ひっくり返されていた白のマスにビットを立てる
+			bB = bB ^ tmpPutPlace;	// 暫定で置いた黒の石を取り除く
+			steps--;				// 手数をひとつ戻す
+
+		SKIP:
+
+			// β値を超えると枝刈り
+			if (score >= beta) {
+				return score;
+			}
+			// α値を更新
+			if (score > score_max) {
+				score_max = score;
+				alpha = max(alpha, score_max);
+
+				if (depth == 1) {
+					// 最善手を記録
+					bestX = xx;
+					bestY = yy;
+				}
+			}
+
+			// depth = 1 の時のスコアを格納
+			if (depth == 1) {
+				arrScore[cntArrScore++] = score;
+			}
+		}
+	}
+
+	for (int i = 0; i < cntArrScore; i++) printf("%6d  ", arrScore[i]);
+
+	// 置く場所がない = パス
+	if (bSelectable == 0) {
+		cntPass++;
+
+		// お互いがパスの場合それ以降石が置かれることがないからその盤面を評価する
+		if (cntPass == 2) {
+			cntPass = 0;
+			return evaluation_function(0);
+		}
+
+		int score = minLevel(alpha, beta, depth + 1);  // 次は相手のターン;
+
+		// β値を超えると枝刈り
+		if (score >= beta) {
+			return score;
+		}
+
+		// α値を更新
+		if (score > score_max) {
+			score_max = score;
+			alpha = max(alpha, score_max);
+
+			if (depth == 1) {
+				// 最善手を記録
+				bestX = xx;
+				bestY = yy;
+			}
+		}
+	}
+
+
+	//// 置ける場所がなかったらの記述をする
+	//if (score_max == (int)(-INFINITY)) return evaluation_function(0); // 評価関数の値を返す
+
+
+	return score_max;
+}
+
+int minLevel(int alpha, int beta, int depth) {
+	if (depth >= depthNow) {
+		//printf("koko");
+		return evaluation_function(1); // 評価関数の値を返す
+	}
+	countStone();
+	if (cntB + cntW == 64) return evaluation_function(1);	 // 盤面が全部埋まったら評価関数の値を返す
+	if (cntB == 0 || cntW == 0) return evaluation_function(1);	// どちらか一方の石がゼロになったら評価関数を返す
+
+	int arrScore[30] = { 0 };	// depth = 1 の時の合法手のスコアを格納
+	int cntArrScore = 0;		// arrScore[] のインデックス用
+
+	int score_min = (int)(INFINITY);  // 最大スコア（正の無限大で初期化)
+
+	int xx = 0;
+	int yy = 0;
+
+
+	// 指すことが可能な座標全てに対して探索を行う
+	for (int i = 63; i >= 0; i--) {
+
+		search_selectable(1);
+
+		if ((bSelectable >> i) & 1) {
+
+			if (++depthNum > DEPTHNUM) {
+				return evaluation_function(1);		//  あらかじめ決めた局面数に達したら評価関数の値を返す
+			}
+
+			int score = 0;
+			xx = abs((63 - i) % 8);
+			yy = abs((63 - i) / 8);
+
+			put(xx, yy, 1);		// 白の石を暫定で置く
+			steps++;			// 手数をカウント
+			int tmpCntPass = cntPass;
+			cntPass = 0;		// パスのカウントをリセット
+			reverse(1);		// 石をひっくり返す
+			unsigned long long tmpPutPlace = putPlace;	 // 置いた石のマスを保存　局面ごとに保存しとかないと値が更新されてしまうから
+			unsigned long long tmpRev = rev;			 // ひっくり返した石のマスを保存　理由は同上
+
+
+			// 暫定で白石を置いたことで黒石が角に置けるようになっていないかチェックする
+			// 白石の合法手の中で角が含まれていないかを判定（角が含まれている場合その手は合法手ではないと判断する）
+			search_selectable(0);
+			countStone();
+			if ((((bSelectable >> 63) & 1) || ((bSelectable >> 56) & 1) ||
+				((bSelectable >> 7) & 1) || ((bSelectable >> 0) & 1)) && (cntB + cntW < 46)) {	// 左上角
+
+				//printf("角置かせない");
+				// reverse の反対
+				bW = bW ^ tmpRev;		// ひっくり返した石のマスを空にする
+				bB = bB | tmpRev;		// ひっくり返されていた黒のマスにビットを立てる
+				bW = bW ^ tmpPutPlace;	// 暫定で置いた白の石を取り除く
+				steps--;				// 手数をひとつ戻す
+
+				score = 99999;
+				depthNum--;
+				goto SKIP;		// 次の候補手を探索する
+
+			}
+			search_selectable(1);
+
+
+			score = maxLevel(alpha, beta, depth + 1);  // 次は相手のターン
+
+
+			// reverse の反対
+			bW = bW ^ tmpRev;		// ひっくり返した石のマスを空にする
+			bB = bB | tmpRev;		// ひっくり返されていた黒のマスにビットを立てる
+			bW = bW ^ tmpPutPlace;	// 暫定で置いた白の石を取り除く	
+			steps--;				// 手数をひとつ戻す
+
+			//timesCnt--;		// カウント（指し手）を１戻す
+
+		SKIP:
+
+			// α値を超えると枝刈り
+			if (score <= alpha) {
+				return score;
+			}
+			// β値を更新
+			if (score < score_min) {
+				score_min = score;
+				beta = min(beta, score_min);
+
+				if (depth == 1) {
+					// 最適な手を記録
+					bestX = xx;
+					bestY = yy;
+				}
+			}
+
+			// depth = 1 の時のスコアを格納
+			if (depth == 1) {
+				arrScore[cntArrScore++] = score;
+			}
+		}
+	}
+
+	for (int i = 0; i < cntArrScore; i++) printf("%6d  ", arrScore[i]);
+
+	// 置く場所がない = パス
+	if (bSelectable == 0) {
+		cntPass++;
+
+		// お互いがパスの場合それ以降石が置かれることがないからその盤面を評価する
+		if (cntPass == 2) {
+			cntPass = 0;
+			return evaluation_function(1);
+		}
+
+		int score = maxLevel(alpha, beta, depth + 1);  // 次は相手のターン;
+
+
+		// α値を超えると枝刈り
+		if (score <= alpha) {
+			return score;
+		}
+		// β値を更新
+		if (score < score_min) {
+			score_min = score;
+			beta = min(beta, score_min);
+
+			if (depth == 1) {
+				// 最適な手を記録
+				bestX = xx;
+				bestY = yy;
+			}
+		}
+
+	}
+
+
+	//// 置ける場所がなかったらの記述をする
+	//if (score_min == (int)(INFINITY)) return evaluation_function(1); // 評価関数の値を返す
+
+
+	return score_min;
+}
+
+int evaluation_function(int index) {
+
+	int end = 0;
+	int scoreXB = 0, scoreXW = 0;	// ３つの評価関数の値を格納する変数
+	int scoreY = 0;
+	int scoreZB = 0;
+	int scoreZW = 0;
+	int result = 0;
+	int cnt = 0;
+
+
+	countStone();
+
+	// 黒か白の石の数が０枚の場合、スコアを 99999 にする
+	{
+		if (index == 0) {
+			//printf("0");
+			if (cntB == 0) {
+				end = 99999;
+				goto SKIP;
+			}
+			else if (cntW == 0) {
+				end = -99999;
+				goto SKIP;
+			}
+
+			// 盤面がすべて埋まったときの石の数で勝敗を検知する  ３１は過半数の枚数を取れているかを判定する
+			if (cntB + cntW == 64) {
+				//printf("0");
+				if (cntB > 31) {
+					end = 99999 + cntB;
+					goto SKIP;
+				}
+				else if (cntB < cntW) {
+					end = -99999;
+					goto SKIP;
+				}
+			}
+		}
+		else if (index == 1) {
+			//printf("1");
+			if (cntB == 0) {
+				end = -99999;
+				goto SKIP;
+			}
+			else if (cntW == 0) {
+				end = 99999;
+				goto SKIP;
+			}
+
+			// 盤面に特定枚数埋まったときの石の数で勝敗を検知する（最終局面は評価関数どうこうではなく石の数を重視するため）
+			if (cntB + cntW == 64) {
+				//printf("1");
+				if (cntB > 31) {
+					end = 99999 + cntB;
+					goto SKIP;
+				}
+				else if (cntB < cntW) {
+					end = -99999;
+					goto SKIP;
+				}
+			}
+		}
+	}
+
+
+
+	 // 角に相手の石がある場合評価を下げる
+	 // ４４手目以降は完全解析するので動作させない　このコードが必要か要検討 *********************::
+	{
+		if (cntB + cntW < 46) {
+			if (index == 0) {
+				search_selectable(1);
+				if (((bSelectable >> 63) & 1) || ((bSelectable >> 56) & 1) ||
+					((bSelectable >> 7) & 1) || ((bSelectable >> 0) & 1)) {	// 左上角
+
+					end = -99999;
+					goto SKIP;
+				}
+			}
+			if (index == 1) {
+				search_selectable(0);
+				if (((bSelectable >> 63) & 1) || ((bSelectable >> 56) & 1) ||
+					((bSelectable >> 7) & 1) || ((bSelectable >> 0) & 1)) {	// 左上角
+
+					end = 99999;
+					goto SKIP;
+				}
+			}
+		}
+	}
+	
+
+
+
+
+	// 石がある場所による評価（ X ）
+	for (int i = 0; i < 64; i++) {
+		if ((bB >> i) & 1) scoreXB += point[i];		// 黒の得点
+		if ((bW >> i) & 1) scoreXW += point[i];		// 白の得点
+	}
+
+	// 着手可能箇所による評価（ Y ）
+	search_selectable(index);
+	for (int i = 0; i < 64; i++) {
+		if ((bSelectable >> i) & 1) scoreY += (20 + point[i]);
+	}
+
+	// 確定石による評価（ Z ）
+	// 角に石があるかを探索してそこから上下左右に連続する石の数を数える
+	// 黒
+
+
+	if ((bB >> 63) & 1) {	// 左上角から右に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bB >> (63 - i)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	if ((bB >> 56) & 1) {	// 右上角から左に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bB >> (56 + i)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	scoreZB += cnt;
+	cnt = 0;		// 各辺の探索ごとにリセットする（各辺の最大石数が８だから）
+
+	if ((bB >> 63) & 1) {	// 左上角から下に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bB >> (63 - i * 8)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	if ((bB >> 7) & 1) {	// 左下角から上に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bB >> (7 + i * 8)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	scoreZB += cnt;
+	cnt = 0;		// 各辺の探索ごとにリセットする（各辺の最大石数が８だから）
+
+	if ((bB >> 56) & 1) {	// 右上角から下に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bB >> (56 - i * 8)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	if ((bB >> 0) & 1) {	// 右下角から上に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bB >> (0 + i * 8)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	scoreZB += cnt;
+	cnt = 0;		// 各辺の探索ごとにリセットする（各辺の最大石数が８だから）
+
+	if ((bB >> 7) & 1) {	// 左下角から右に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bB >> (7 - i)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	if ((bB >> 0) & 1) {	// 右下角から左に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bB >> (0 + i)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	scoreZB += cnt;
+	cnt = 0;		// 各辺の探索ごとにリセットする（各辺の最大石数が８だから）
+
+	// 白
+
+	if ((bW >> 63) & 1) {	// 左上角から右に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bW >> (63 - i)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	if ((bW >> 56) & 1) {	// 右上角から左に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bW >> (56 + i)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	scoreZW += cnt;
+	cnt = 0;		// 各辺の探索ごとにリセットする（各辺の最大石数が８だから）
+
+	if ((bW >> 63) & 1) {	// 左上角から下に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bW >> (63 - i * 8)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	if ((bW >> 7) & 1) {	// 左下角から上に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bW >> (7 + i * 8)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	scoreZW += cnt;
+	cnt = 0;		// 各辺の探索ごとにリセットする（各辺の最大石数が８だから）
+
+	if ((bW >> 56) & 1) {	// 右上角から下に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bW >> (56 - i * 8)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	if ((bW >> 0) & 1) {	// 右下角から上に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bW >> (0 + i * 8)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	scoreZW += cnt;
+	cnt = 0;		// 各辺の探索ごとにリセットする（各辺の最大石数が８だから）
+
+	if ((bW >> 7) & 1) {	// 左下角から右に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bW >> (7 - i)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	if ((bW >> 0) & 1) {	// 右下角から左に探索
+		for (int i = 1; i < 8; i++) {
+			if ((bW >> (0 + i)) & 1) cnt++;
+			if (cnt > 8) cnt = 8;
+		}
+	}
+	scoreZW += cnt;
+	cnt = 0;		// 各辺の探索ごとにリセットする（各辺の最大石数が８だから）
+
+
+
+SKIP:
+
+	if (index == 0) {
+		//printf("X");
+		result = end + (scoreXB * 10) + (scoreXW * 15) + (scoreY * 10) + (scoreZB - scoreZW) * 30;
+	}
+	else if (index == 1) {
+		//printf("Y");
+		result = end + ((scoreXB * 10) + (scoreXW * 15) + (scoreY * 10) + (scoreZB - scoreZW) * 30) * -1;
+	}
+
+	//printf("%d\n", result);
+
+	return result;
+}
+
+
+
+// 評価関数を実装する ****************************** 20250117
+// 角が弱くなってる

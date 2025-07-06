@@ -1,0 +1,49 @@
+
+【仕様】
+
+・盤面は bit borad で実装する
+
+・player , com それぞれの bit borad を用意して、and , or 演算で盤面を表現する
+
+・石を置くことが可能なマスに小さな丸をつけてわかりやすくする
+
+・盤面は画像として背景に設定する
+
+
+
+【参考サイト】
+・https://qiita.com/YSRKEN/items/29829c7f5beae7900f36	// ビットボードの凄さをざっくりと解説してみる
+・https://note.com/qweral/n/necb2425b0b28	// 最強の立体四目並べAIを作る
+・https://qiita.com/watergreat31/items/09f114799319c7ba19dc	// ビットボードの紹介～少しのオセロ実装を添えて～
+・https://qiita.com/KjumanEnobikto/items/31b2024f361987e26b5f	// 【図解】オセロのビットボード実装、合法手検出について
+・https://www.ipsj.or.jp/event/taikai/82/82PosterSession/img/portfolio/82P_1062.pdf	// minimax法によるリバーシの最善手の探索
+
+・https://www.afsgames.com/reversi.htm	// オセロ対戦
+・https://www.othello.org/eval/			// オセロAI　web
+
+・https://bassy84.net/othello-top-index.html	// オセロ定石
+
+
+【仕様】
+
+・盤面の位置による評価(X)、着手可能箇所による評価(Y)、確定石による評価(Z)、序盤は枚数
+・自分が置いたことによって、相手の合法手に角が出現するような手の評価を下げる
+・３１手目～４３手目まで探索の深さ(depthNow)を１２にする
+・４４手目から完全解析。勝ち局面ならば勝ちを逃さない
+・勝ち局面、負け局面どちらであっても、できるだけ自分の石の枚数が多い局面を高く評価する
+
+
+
+
+
+
+【処理の流れ】
+
+例えばA4に置きたい場合、以下の流れをたどる
+
+・"A4"をビットに変換 →「0x0000008000000000」
+・「0x0000008000000000」が着手可能な場所かを調べる
+・可能なら着手し、石をひっくり返す
+・パスの判定
+・終局の判定
+・手番を交代
